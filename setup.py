@@ -76,7 +76,7 @@ class BuildExt(build_ext):
     c_opts = {
         'msvc': ['/EHsc', '/openmp', '/O2'],
         #'unix': ['-O3', '-march=native'],  # , '-w'
-        'unix': ['-O3'],  # , '-w'
+        'unix': ['-O3', '-fopenmp', '-march=native'],  # , '-w'
     }
     if not os.environ.get("HNSWLIB_NO_NATIVE"):
         c_opts['unix'].append('-march=native')

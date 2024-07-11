@@ -8,6 +8,7 @@
 #include <atomic>
 #include <stdlib.h>
 #include <assert.h>
+#include <omp.h>
 
 namespace py = pybind11;
 using namespace pybind11::literals;  // needed to bring in _a literal
@@ -643,6 +644,25 @@ class Index {
                 });
             } else {
                 std::vector<float> norm_array(num_threads * features);
+//                 std::vector<float> norm_array(rows * features);
+//             omp_set_num_threads(num_threads);
+// #pragma omp parallel for schedule(dynamic, 1)
+//                 for (size_t row = 0; row < rows; row++) {
+//                     float* data = (float*)items.data(row);
+//                     size_t start_idx = row * dim;
+//                     normalize_vector((float*)items.data(row), (norm_array.data() + start_idx));
+//                     std::priority_queue<std::pair<dist_t, hnswlib::labeltype >> result = appr_alg->searchKnn(
+//                                     (void*)(norm_array.data() + start_idx), k, p_idFilter);
+//                     if (result.size() != k)
+//                         throw std::runtime_error(
+//                             "Cannot return the results in a contigious 2D array. Probably ef or M is too small");
+//                     for (int i = k - 1; i >= 0; i--) {
+//                         auto& result_tuple = result.top();
+//                         data_numpy_d[row * k + i] = result_tuple.first;
+//                         data_numpy_l[row * k + i] = result_tuple.second;
+//                         result.pop();
+//                     }
+//                 }
                 ParallelFor(0, rows, num_threads, [&](size_t row, size_t threadId) {
                     float* data = (float*)items.data(row);
 
@@ -689,6 +709,26 @@ class Index {
         appr_alg->markDelete(label);
     }
 
+    long getMetricHops() {
+        return appr_alg->metric_hops.load();
+    }
+
+    long getMetricDistComp() {
+        return appr_alg->metric_distance_computations.load();
+    }
+    
+    void resetMetricHops() {
+        appr_alg->metric_hops = 0;
+    }
+
+    void resetMetricDistComp() {
+        appr_alg->metric_distance_computations = 0;
+    }
+
+    double getLevel0AvgDegree() {
+        double a = appr_alg->level0_avg_degree_;
+        return a;
+    }
 
     void unmarkDeleted(size_t label) {
         appr_alg->unmarkDelete(label);
@@ -915,6 +955,11 @@ PYBIND11_PLUGIN(hnswlib) {
         .def("resize_index", &Index<float>::resizeIndex, py::arg("new_size"))
         .def("get_max_elements", &Index<float>::getMaxElements)
         .def("get_current_count", &Index<float>::getCurrentCount)
+        .def("get_metric_hops", &Index<float>::getMetricHops)
+        .def("get_metric_dist_comp", &Index<float>::getMetricDistComp)
+        .def("reset_metric_hops", &Index<float>::resetMetricHops)
+        .def("reset_metric_dist_comp", &Index<float>::resetMetricDistComp)
+        .def("get_level0_avg_degree", &Index<float>::getLevel0AvgDegree)
         .def_readonly("space", &Index<float>::space_name)
         .def_readonly("dim", &Index<float>::dim)
         .def_readwrite("num_threads", &Index<float>::num_threads_default)

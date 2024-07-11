@@ -63,6 +63,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
 
     mutable std::atomic<long> metric_distance_computations{0};
     mutable std::atomic<long> metric_hops{0};
+    mutable double level0_avg_degree_ = 0;
 
     bool allow_replace_deleted_ = false;  // flag to replace deleted elements (marked as deleted) during insertions
 
@@ -122,7 +123,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
 
         cur_element_count = 0;
 
-        visited_list_pool_ = new VisitedListPool(1, max_elements);
+        visited_list_pool_ = new VisitedListPool(16, max_elements);
 
         // initializations for special treatment of the first node
         enterpoint_node_ = -1;
@@ -328,9 +329,9 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
             size_t size = getListCount((linklistsizeint*)data);
 //                bool cur_node_deleted = isMarkedDeleted(current_node_id);
             if (collect_metrics) {
-                metric_hops++;
-                metric_distance_computations+=size;
+                // metric_distance_computations+=size;
             }
+            metric_hops++;
 
 #ifdef USE_SSE
             _mm_prefetch((char *) (visited_array + *(data + 1)), _MM_HINT_T0);
@@ -349,7 +350,8 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
 #endif
                 if (!(visited_array[candidate_id] == visited_array_tag)) {
                     visited_array[candidate_id] = visited_array_tag;
-
+                    // ++metric_distance_computations;
+                    // metric_distance_computations.fetch_add(1, std::memory_order_relaxed);
                     char *currObj1 = (getDataByInternalId(candidate_id));
                     dist_t dist = fstdistfunc_(data_point, currObj1, dist_func_param_);
 
@@ -691,7 +693,14 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         if (data_level0_memory_ == nullptr)
             throw std::runtime_error("Not enough memory: loadIndex failed to allocate level0");
         input.read(data_level0_memory_, cur_element_count * size_data_per_element_);
-
+        size_t avg_degree = 0;
+        for (int current_node_id = 0; current_node_id < max_elements; ++ current_node_id) {
+            int *data = (int *) get_linklist0(current_node_id);
+            size_t size = getListCount((linklistsizeint*)data);
+            avg_degree += size;
+        }
+        level0_avg_degree_ = (static_cast<double>(avg_degree) / static_cast<double>(max_elements));
+        
         size_links_per_element_ = maxM_ * sizeof(tableint) + sizeof(linklistsizeint);
 
         size_links_level0_ = maxM0_ * sizeof(tableint) + sizeof(linklistsizeint);
